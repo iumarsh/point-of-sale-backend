@@ -21,6 +21,33 @@ const addCategory = async (req, res) =>{
       }
   
 }
+const updateCategoryById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, categoryType, quantity, additionalInfo, price } = req.body;
+
+    // Check if category exists
+    const category = await Category.findById(id);
+
+    if (!category) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+
+    // Update category fields
+    category.name = name;
+    category.categoryType = categoryType;
+    category.quantity = quantity;
+    category.additionalInfo = additionalInfo;
+    category.price = price;
+
+    await category.save();
+
+    res.status(200).json({ message: 'Category updated successfully', updatedCategory: category });
+  } catch (error) {
+    console.log('error: ', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
 const deleteCategoryById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -54,4 +81,5 @@ module.exports = {
     addCategory,
     getAllCategories,
     deleteCategoryById,
+    updateCategoryById
   };
