@@ -8,7 +8,7 @@ const addTransaction = async (req, res) => {
       const { name, quantity } = item;
 
       // Retrieve the relevant category from the database
-      const category = await Category.findOne({ name });
+      const category = await Category.findOne({ name }); //id
 
       if (!category) {
         return res.status(404).json({ error: `Category for item ${name} not found` });
@@ -40,6 +40,30 @@ const addTransaction = async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+const getTransactionById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+     // Find the transaction by ID
+     const transaction = await Transaction.findById(id).populate({
+      path: 'items.category',
+      select: 'name categoryType quantity'
+    });
+    
+     // Check if transaction exists
+     if (!transaction) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+   
+
+    // Return the transaction
+    res.status(200).json({ transaction });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
 
 const deleteTransactionById = async (req, res) => {
   try {
@@ -63,7 +87,10 @@ const deleteTransactionById = async (req, res) => {
 
 const getAllTransactions = async (req, res) => {
   try {
-    const transactions = await Transaction.find();
+    const transactions = await Transaction.find().populate({
+      path: 'items.category',
+      select: 'name categoryType quantity'
+    }); //explicit tell to fetch the data.
     res.status(200).json({ transactions });
   } catch (error) {
     console.error(error);
@@ -75,4 +102,5 @@ module.exports = {
   addTransaction,
   getAllTransactions,
   deleteTransactionById,
+  getTransactionById
 };

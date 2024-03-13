@@ -3,10 +3,10 @@ const mongoose = require("mongoose");
 const TransactionSchema = new mongoose.Schema({
     items: [
         {
-          name: {
-            type: String,
-            required: true,
-            trim: true,
+          category: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Category', // Reference to the Category model
+            required: true
           },
           quantity: {
             type: Number,
@@ -23,7 +23,7 @@ const TransactionSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
-    customerName: {
+    customerName: { //customer Table cnic
         type: String,
         trim: true,
     },
