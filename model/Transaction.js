@@ -17,6 +17,20 @@ const TransactionSchema = new mongoose.Schema({
             type: Number,
             required: true,
           },
+          discount: {
+            type: Number,
+            required: false,
+            default: 0,
+          },
+          than: {
+            type: Number,
+            required: false,
+            default: 1,
+          },
+          type: {
+            type: String,
+            required: true,
+          },
         },
     ],
     grandTotal: {
