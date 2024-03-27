@@ -79,7 +79,7 @@ const deleteCategoryById = async (req, res) => {
 
 const getAllCategories = async (req, res) => {
     try {
-        const categories = await Category.find();
+        const categories = await Category.find().sort({ createdAt: -1 });;
         res.status(200).json({ categories });
       } catch (error) {
         res.status(500).json({ error: 'Internal Server Error' });

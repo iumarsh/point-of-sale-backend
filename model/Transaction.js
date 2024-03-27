@@ -41,6 +41,21 @@ const TransactionSchema = new mongoose.Schema({
         type: String,
         trim: true,
     },
+    builty: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    cnic: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    contact: {
+      type: String,
+      trim: true,
+      default: ""
+    }
 
 },{timestamps: true});
 

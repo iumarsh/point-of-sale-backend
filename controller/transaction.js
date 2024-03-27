@@ -2,7 +2,7 @@ const Transaction = require('../model/Transaction');
 const Category = require('../model/Category');
 const addTransaction = async (req, res) => {
 	try {
-		const { items, grandTotal, customerName } = req.body;
+		const { items, grandTotal, customerName, builty, cnic, contact } = req.body;
 
 		for (const item of items) {
 			const { name, quantity } = item;
@@ -29,12 +29,15 @@ const addTransaction = async (req, res) => {
 			items,
 			grandTotal,
 			customerName,
+			builty,
+			cnic,
+			contact
 		});
 
 		// Save the transaction to the database
 		await newTransaction.save();
 
-		res.status(201).json({ message: 'Transaction added successfully', newTransaction });
+		res.status(201).json({ message: 'Transaction added successfully', transaction: newTransaction });
 	} catch (error) {
 		console.error(error);
 		res.status(500).json({ error: 'Internal Server Error' });
@@ -90,7 +93,8 @@ const getAllTransactions = async (req, res) => {
 		const transactions = await Transaction.find().populate({
 			path: 'items.category',
 			select: 'name categoryType quantity'
-		}); //explicit tell to fetch the data.
+		}).sort({ createdAt: -1 });
+		//explicit tell to fetch the data.
 		res.status(200).json({ transactions });
 	} catch (error) {
 		console.error(error);
@@ -101,7 +105,7 @@ const getAllTransactions = async (req, res) => {
 const updateTransactionById = async (req, res) => {
 	try {
 		const { id } = req.params;
-		const { items, grandTotal, customerName, deletedItems } = req.body;
+		const { items, grandTotal, customerName, deletedItems, builty, cnic, contact } = req.body;
 
 
 		// Check if transaction exists
@@ -196,6 +200,10 @@ const updateTransactionById = async (req, res) => {
 
 		transaction.grandTotal = grandTotal;
 		transaction.items = items;
+		transaction.builty = builty;
+		transaction.customerName = customerName;
+		transaction.cnic = cnic;
+		transaction.contact = contact;
 
 		// Save the transaction to the database
 		await transaction.save();
