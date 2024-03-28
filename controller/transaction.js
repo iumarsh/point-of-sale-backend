@@ -120,7 +120,6 @@ const updateTransactionById = async (req, res) => {
 
 		for (const item of items) {
 			const { _id, name, quantity } = item;
-			console.log(item, "item")
 
 			let categoryID;
 			if (_id !== undefined && _id !== null) categoryID = item.category._id;
@@ -131,13 +130,9 @@ const updateTransactionById = async (req, res) => {
 			if (_id !== undefined && _id !== null) {
 				const f = transaction.items.filter(
 					(d) => {
-						console.log(d, "d")
 						return d._id.toString() === _id.toString()
 					}
 				)
-				console.log("129", _id, "_id");
-				console.log("130", transaction.items, "transaction.items");
-				console.log("131", f, "f");
 				if (f.length) {
 					t = f[0]
 					updateQty = parseInt(t.quantity) - parseInt(quantity)
@@ -146,8 +141,6 @@ const updateTransactionById = async (req, res) => {
 			else {
 				updateQty = -(quantity)
 			}
-
-			console.log("141", t, "t");
 
 			// Retrieve the relevant category from the database
 			// const category = await Category.findById(t._id); //t.category._id or t._id // id
