@@ -1,4 +1,5 @@
 const Category = require('../model/Category'); 
+const Transaction = require('../model/Transaction');
 
 const addCategory = async (req, res) =>{
     try {
@@ -58,18 +59,27 @@ const deleteCategoryById = async (req, res) => {
         if (!category) {
           return res.status(404).json({ error: 'Category not found' });
         }
-  
+        // Update transactions referencing the deleted category
+        await Transaction.updateMany(
+          { 'items.category': id },
+          { $set: { 'items.$[elem].category': null } },
+          { arrayFilters: [{ 'elem.category': id }] }
+      );
+
+
+        // Delete the category
         await Category.findByIdAndDelete(id);
+
   
         res.status(200).json({ message: 'Category deleted successfully' });
       } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: `${error?.message} Internal Server Error` });
       }
 }
 
 const getAllCategories = async (req, res) => {
     try {
-        const categories = await Category.find();
+        const categories = await Category.find().sort({ createdAt: -1 });;
         res.status(200).json({ categories });
       } catch (error) {
         res.status(500).json({ error: 'Internal Server Error' });
