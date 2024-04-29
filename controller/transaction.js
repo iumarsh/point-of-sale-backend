@@ -206,11 +206,30 @@ const updateTransactionById = async (req, res) => {
 		res.status(500).json({ error: 'Internal Server Error' });
 	}
 };
+export const getTransactionsByContact = async (req, res) => {
+    try {
+        const { contactNumber } = req.params;
+
+        // Find transactions by contact number
+        const transactions = await Transaction.find({ contact: contactNumber }).populate({
+            path: 'items.category',
+            select: 'name categoryType quantity'
+        }).sort({ createdAt: -1 });
+
+        // Return the transactions
+        res.status(200).json({ transactions });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
 
 module.exports = {
 	addTransaction,
 	getAllTransactions,
 	deleteTransactionById,
 	getTransactionById,
-	updateTransactionById
+	updateTransactionById,
+	getTransactionsByContact
 };
