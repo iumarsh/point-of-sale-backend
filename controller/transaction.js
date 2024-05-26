@@ -2,7 +2,7 @@ const Transaction = require('../model/Transaction');
 const Category = require('../model/Category');
 const addTransaction = async (req, res) => {
 	try {
-		const { items, grandTotal, customerName, builty, cnic, contact } = req.body;
+		const { items, grandTotal, customerName, builty, cnic, contact, transactionType="", receiving } = req.body;
 
 		for (const item of items) {
 			const { name, quantity } = item;
@@ -31,7 +31,9 @@ const addTransaction = async (req, res) => {
 			customerName,
 			builty,
 			cnic,
-			contact
+			contact,
+			receiving,
+			transactionType
 		});
 
 		// Save the transaction to the database
@@ -105,7 +107,7 @@ const getAllTransactions = async (req, res) => {
 const updateTransactionById = async (req, res) => {
 	try {
 		const { id } = req.params;
-		const { items, grandTotal, customerName, deletedItems, builty, cnic, contact } = req.body;
+		const { items, grandTotal, customerName, deletedItems, builty, cnic, contact, transactionType, receiving } = req.body;
 
 
 		// Check if transaction exists
@@ -197,6 +199,8 @@ const updateTransactionById = async (req, res) => {
 		transaction.customerName = customerName;
 		transaction.cnic = cnic;
 		transaction.contact = contact;
+		transaction.transactionType = transactionType;
+		transaction.receiving = receiving;
 
 		// Save the transaction to the database
 		await transaction.save();
@@ -206,11 +210,32 @@ const updateTransactionById = async (req, res) => {
 		res.status(500).json({ error: 'Internal Server Error' });
 	}
 };
+const getTransactionsByContact = async (req, res) => {
+    try {
+        const { contactNumber } = req.params;
+		contactNumber?.replace(/\D/g, '');
+		const regex = new RegExp(`^${contactNumber.replace(/(\d{4})(\d{7})/, '$1[- ]?$2')}$`, 'i');
+
+        // Find transactions by contact number
+        const transactions = await Transaction.find({ contact: { $regex: regex } }).populate({
+            path: 'items.category',
+            select: 'name categoryType quantity'
+        }).sort({ createdAt: -1 });
+
+        // Return the transactions
+        res.status(200).json({ transactions });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
 
 module.exports = {
 	addTransaction,
 	getAllTransactions,
 	deleteTransactionById,
 	getTransactionById,
-	updateTransactionById
+	updateTransactionById,
+	getTransactionsByContact
 };
