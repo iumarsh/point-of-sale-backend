@@ -3,6 +3,8 @@ const router = express.Router();
  
 const category = require('./category')
 const transaction = require('./transaction')
+const auth = require('./auth')
+
 
 
 
@@ -10,4 +12,6 @@ const transaction = require('./transaction')
 
 router.use(category);
 router.use(transaction)
+router.use(auth)
+
 module.exports = router;

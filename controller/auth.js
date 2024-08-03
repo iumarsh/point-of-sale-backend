@@ -30,7 +30,15 @@ const register = async (req, res) => {
     // Save user to database
     let _user = await newUser.save();
 
-    res.status(201).json({ message: 'User created successfully', user: _user });
+    res.status(201).json({ message: 'User created successfully', user: {
+      firstName,
+      lastName,
+      phoneNo,
+      cnic,
+      address,
+      email
+    } 
+  });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -56,7 +64,7 @@ const login = async (req, res) => {
     // Generate JWT token
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
 
-    res.status(200).json({ token });
+    res.status(200).json({role: user.role, token, firstName: user.firstName, lastName: user.lastName });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
