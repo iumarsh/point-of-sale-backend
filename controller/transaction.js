@@ -90,20 +90,39 @@ const deleteTransactionById = async (req, res) => {
 	}
 };
 
-const getAllTransactions = async (req, res) => {
-	try {
-		const transactions = await Transaction.find().populate({
-			path: 'items.category',
-			select: 'name categoryType quantity'
-		}).sort({ createdAt: -1 });
-		//explicit tell to fetch the data.
-		res.status(200).json({ transactions });
-	} catch (error) {
-		console.error(error);
-		res.status(500).json({ error: 'Internal Server Error' });
-	}
-};
 
+const getAllTransactions = async (req, res) => {
+	
+  
+	try {
+	const limit = req.query.limit ? parseInt(req.query.limit) : null; // Get limit from query parameter, if provided
+	  let query = Transaction.find().populate({
+		path: 'items.category',
+		select: 'name categoryType quantity'
+	  }).sort({ createdAt: -1 });
+  
+	  if (limit !== null && limit > 0) {
+		query = query.limit(limit); // Apply limit if specified and greater than 0
+	  }
+  
+	  const transactions = await query.exec();
+
+	  // Calculate total count, this month's count, and today's count
+	  const totalCount = transactions.length;
+	  const todayStart = new Date();
+	  todayStart.setHours(0, 0, 0, 0);
+	  const thisMonthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+	  const thisMonthCount = transactions.filter(transaction => transaction.createdAt >= thisMonthStart).length;
+	  const todayCount = transactions.filter(transaction => transaction.createdAt >= todayStart).length;
+  
+  
+	  res.status(200).json({ transactions,  total: totalCount, monthly: thisMonthCount, daily: todayCount });
+	} catch (error) {
+	  console.error(error);
+	  res.status(500).json({ error: 'Internal Server Error' });
+	}
+  };
+  
 const updateTransactionById = async (req, res) => {
 	try {
 		const { id } = req.params;
