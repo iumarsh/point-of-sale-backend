@@ -14,7 +14,6 @@ app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
 app.use(cors());
 
 const verify = (req, res, next) => {
-  console.log('req: ', req);
   const authHeader = req.headers.authorization;
 
   // Check if the request path is login or register
