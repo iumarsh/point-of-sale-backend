@@ -55,6 +55,16 @@ const TransactionSchema = new mongoose.Schema({
       type: String,
       trim: true,
       default: ""
+    },
+    receiving: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    transactionType: {
+      type: String,
+      required: true,
+      default: 'Cash'
     }
 
 },{timestamps: true});
