@@ -1,30 +1,104 @@
 const Transaction = require('../model/Transaction');
 const Category = require('../model/Category');
+const mongoose = require('mongoose');
+
+const resolveCategoryId = (item) => {
+	if (item?.category?._id) return item.category._id.toString();
+	if (item?.category) return item.category.toString();
+	return null;
+};
+
+const addDelta = (map, categoryId, delta) => {
+	if (!categoryId || !delta) return;
+	map.set(categoryId, (map.get(categoryId) || 0) + delta);
+};
+
+// Apply net stock changes in one find + bulkWrite.
+// delta > 0 restores stock; delta < 0 deducts stock.
+const applyCategoryStockDeltas = async (deltaByCategoryId) => {
+	const categoryIds = [...deltaByCategoryId.keys()].filter(
+		(id) => (deltaByCategoryId.get(id) || 0) !== 0
+	);
+	if (!categoryIds.length) return;
+
+	for (const categoryId of categoryIds) {
+		if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+			const err = new Error(`Invalid category id ${categoryId}`);
+			err.status = 400;
+			throw err;
+		}
+	}
+
+	const categories = await Category.find({ _id: { $in: categoryIds } });
+	const categoryById = new Map(categories.map((c) => [c._id.toString(), c]));
+
+	for (const categoryId of categoryIds) {
+		const category = categoryById.get(categoryId);
+		const delta = deltaByCategoryId.get(categoryId);
+
+		if (!category) {
+			const err = new Error(`Category for item ${categoryId} not found`);
+			err.status = 404;
+			throw err;
+		}
+		if (delta < 0 && category.quantity < -delta) {
+			const err = new Error(`Insufficient quantity for item ${category.name}`);
+			err.status = 500;
+			throw err;
+		}
+	}
+
+	const bulkOps = categoryIds.map((categoryId) => {
+		const delta = deltaByCategoryId.get(categoryId);
+		const filter = { _id: categoryId };
+		if (delta < 0) {
+			filter.quantity = { $gte: -delta };
+		}
+		return {
+			updateOne: {
+				filter,
+				update: { $inc: { quantity: delta } },
+			},
+		};
+	});
+
+	const bulkResult = await Category.bulkWrite(bulkOps);
+	if (bulkResult.modifiedCount !== categoryIds.length) {
+		const err = new Error('Failed to update inventory; one or more items may have insufficient stock');
+		err.status = 500;
+		throw err;
+	}
+};
+
+const deductCategoryQuantities = async (items) => {
+	const deltaByCategoryId = new Map();
+
+	for (const item of items) {
+		const categoryId = resolveCategoryId(item);
+		const quantity = Number(item.quantity) || 0;
+
+		if (!categoryId) {
+			const err = new Error(`Category for item ${item.name || 'unknown'} not found`);
+			err.status = 404;
+			throw err;
+		}
+
+		addDelta(deltaByCategoryId, categoryId, -quantity);
+	}
+
+	await applyCategoryStockDeltas(deltaByCategoryId);
+};
+
 const addTransaction = async (req, res) => {
 	try {
 		const { items, grandTotal, customerName, builty, cnic, contact, transactionType="", receiving } = req.body;
 
-		for (const item of items) {
-			const { name, quantity } = item;
-
-			// Retrieve the relevant category from the database
-			const category = await Category.findOne({ name }); //id
-
-			if (!category) {
-				return res.status(404).json({ error: `Category for item ${name} not found` });
-			}
-			if (category.quantity < quantity) {
-				return res.status(500).json({ error: `Insufficient quantity for item ${name}` });
-			}
-
-			// Update the category quantity based on the quantity in the items
-			category.quantity -= quantity;
-
-			// Save the updated category to the database
-			await category.save();
+		if (!Array.isArray(items) || items.length === 0) {
+			return res.status(400).json({ error: 'Items are required' });
 		}
 
-		// Create a new transaction instance
+		await deductCategoryQuantities(items);
+
 		const newTransaction = new Transaction({
 			items,
 			grandTotal,
@@ -36,12 +110,14 @@ const addTransaction = async (req, res) => {
 			transactionType
 		});
 
-		// Save the transaction to the database
 		await newTransaction.save();
 
 		res.status(201).json({ message: 'Transaction added successfully', transaction: newTransaction });
 	} catch (error) {
 		console.error(error);
+		if (error.status) {
+			return res.status(error.status).json({ error: error.message });
+		}
 		res.status(500).json({ error: 'Internal Server Error' });
 	}
 };
@@ -126,91 +202,59 @@ const getAllTransactions = async (req, res) => {
 const updateTransactionById = async (req, res) => {
 	try {
 		const { id } = req.params;
-		const { items, grandTotal, customerName, deletedItems, builty, cnic, contact, transactionType, receiving } = req.body;
+		const { items, grandTotal, customerName, deletedItems = [], builty, cnic, contact, transactionType, receiving } = req.body;
 
-
-		// Check if transaction exists
 		const transaction = await Transaction.findById(id).populate({
 			path: 'items.category',
 			select: 'name categoryType quantity'
 		});
-		// console.log(transaction);
 		if (!transaction) {
 			return res.status(404).json({ error: 'Transaction not found' });
 		}
 
+		const existingById = new Map(
+			transaction.items.map((line) => [line._id.toString(), line])
+		);
+		const deltaByCategoryId = new Map();
+
 		for (const item of items) {
-			const { _id, name, quantity } = item;
+			const categoryID = resolveCategoryId(item);
+			if (!categoryID) {
+				return res.status(404).json({ error: `Category for item ${item.name || 'unknown'} not found` });
+			}
 
-			let categoryID;
-			if (_id !== undefined && _id !== null) categoryID = item.category._id;
-			else categoryID = item.category;
-
+			const quantity = parseInt(item.quantity, 10) || 0;
 			let updateQty;
-			let t;
-			if (_id !== undefined && _id !== null) {
-				const f = transaction.items.filter(
-					(d) => {
-						return d._id.toString() === _id.toString()
-					}
-				)
-				if (f.length) {
-					t = f[0]
-					updateQty = parseInt(t.quantity) - parseInt(quantity)
+
+			if (item._id !== undefined && item._id !== null) {
+				const existing = existingById.get(item._id.toString());
+				if (existing) {
+					// old - new: positive restores stock, negative deducts more
+					updateQty = parseInt(existing.quantity, 10) - quantity;
+				} else {
+					updateQty = -quantity;
 				}
-			}
-			else {
-				updateQty = -(quantity)
-			}
-
-			// Retrieve the relevant category from the database
-			// const category = await Category.findById(t._id); //t.category._id or t._id // id
-			const category = await Category.findById(categoryID); //id
-
-			if (!category) {
-				return res.status(404).json({ error: `Category for item ${category.name} not found` });
+			} else {
+				updateQty = -quantity;
 			}
 
-			// quantity greater than before
-			//  -5 < 0 && 10 < 15
-			//  -5 < 0 && 20 < 15
-			if (updateQty < 0 && category.quantity < quantity) {
-				return res.status(500).json({ error: `Insufficient quantity for item ${name}` });
-			}
-
-			category.quantity = category.quantity + (updateQty)
-
-			// Update the category quantity based on the quantity in the items
-			// category.quantity -= quantity;
-
-			// Save the updated category to the database
-			await category.save();
+			addDelta(deltaByCategoryId, categoryID, updateQty);
 			item.category = categoryID;
-			// items.push(item);
 		}
 
-		for (const delItemID of deletedItems) {
+		for (const delItemID of deletedItems || []) {
+			const existing = existingById.get(delItemID?.toString?.() || String(delItemID));
+			if (!existing) continue;
 
-			const f = transaction.items.filter((d) => { return d._id.toString() === delItemID })
-			let t = f[0]
-			let categoryID = t.category._id
-			let quantity = +t.quantity
-
-			// Retrieve the relevant category from the database
-			const category = await Category.findById(categoryID); //id
-
-			if (!category) {
-				return res.status(404).json({ error: `Category for item ${category.name} not found` });
+			const categoryID = resolveCategoryId(existing);
+			const quantity = +existing.quantity || 0;
+			if (!categoryID) {
+				return res.status(404).json({ error: `Category for deleted item not found` });
 			}
-
-			// Update the category quantity based on the quantity in the items
-			category.quantity += quantity;
-
-			// Save the updated category to the database
-			await category.save();
-			// items.push(item);
+			addDelta(deltaByCategoryId, categoryID, quantity);
 		}
-		// update transaction
+
+		await applyCategoryStockDeltas(deltaByCategoryId);
 
 		transaction.grandTotal = grandTotal;
 		transaction.items = items;
@@ -221,11 +265,13 @@ const updateTransactionById = async (req, res) => {
 		transaction.transactionType = transactionType;
 		transaction.receiving = receiving;
 
-		// Save the transaction to the database
 		await transaction.save();
 		res.status(201).json({ message: 'Transaction added successfully', transaction });
 	} catch (error) {
 		console.error(error);
+		if (error.status) {
+			return res.status(error.status).json({ error: error.message });
+		}
 		res.status(500).json({ error: 'Internal Server Error' });
 	}
 };
